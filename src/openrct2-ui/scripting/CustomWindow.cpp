@@ -249,6 +249,106 @@ namespace OpenRCT2::Ui::Windows
         }
     };
 
+    // Utility to override a bool only if input is a boolean
+    inline void SetBoolIfDefined(const DukValue& input, bool& out)
+    {
+        if (input.type() == DukValue::Type::BOOLEAN)
+        {
+            out = input.as_bool();
+        }
+    }
+
+    struct CustomWindowFlags
+    {
+        bool StickToBack = false;
+        bool StickToFront = false;
+        bool NoScrolling = false;
+        bool ScrollingToLocation = false;
+        bool Transparent = false;
+        bool NoBackground = false;
+        bool Dead = false;
+        bool Flag7 = false;
+        bool Resizable = true;
+        bool NoAutoClose = false;
+        bool Flag10 = false;
+        bool WhiteBorderOne = false;
+        bool WhiteBorderMask = false;
+        bool NoTitleBar = false;
+        bool NoSnapping = false;
+        bool AutoPosition = false;
+        bool CentreScreen = false;
+
+        static CustomWindowFlags FromDukValue(DukValue desc)
+        {
+            CustomWindowFlags r;
+            if (desc.type() != DukValue::Type::OBJECT)
+            {
+                return r;
+            }
+
+            SetBoolIfDefined(desc["stickToBack"], r.StickToBack);
+            SetBoolIfDefined(desc["stickToFront"], r.StickToFront);
+            SetBoolIfDefined(desc["noScrolling"], r.NoScrolling);
+            SetBoolIfDefined(desc["scrollingToLocation"], r.ScrollingToLocation);
+            SetBoolIfDefined(desc["transparent"], r.Transparent);
+            SetBoolIfDefined(desc["noBackground"], r.NoBackground);
+            SetBoolIfDefined(desc["dead"], r.Dead);
+            SetBoolIfDefined(desc["flag7"], r.Flag7);
+            SetBoolIfDefined(desc["resizable"], r.Resizable);
+            SetBoolIfDefined(desc["noAutoClose"], r.NoAutoClose);
+            SetBoolIfDefined(desc["flag10"], r.Flag10);
+            SetBoolIfDefined(desc["whiteBorderOne"], r.WhiteBorderOne);
+            SetBoolIfDefined(desc["whiteBorderMask"], r.WhiteBorderMask);
+            SetBoolIfDefined(desc["noTitleBar"], r.NoTitleBar);
+            SetBoolIfDefined(desc["noSnapping"], r.NoSnapping);
+            SetBoolIfDefined(desc["autoPosition"], r.AutoPosition);
+            SetBoolIfDefined(desc["centreScreen"], r.CentreScreen);
+            return r;
+        }
+
+        uint16_t ToWindowFlags() const
+        {
+            uint16_t f = 0;
+
+            // Skip WF_TRANSPARENT due to weird artifacting if not set
+
+            if (StickToBack)
+                f |= WF_STICK_TO_BACK;
+            if (StickToFront)
+                f |= WF_STICK_TO_FRONT;
+            if (NoScrolling)
+                f |= WF_NO_SCROLLING;
+            if (ScrollingToLocation)
+                f |= WF_SCROLLING_TO_LOCATION;
+            if (NoBackground)
+                f |= WF_NO_BACKGROUND;
+            if (Dead)
+                f |= WF_DEAD;
+            if (Flag7)
+                f |= WF_7;
+            if (Resizable)
+                f |= WF_RESIZABLE;
+            if (NoAutoClose)
+                f |= WF_NO_AUTO_CLOSE;
+            if (Flag10)
+                f |= WF_10;
+            if (WhiteBorderOne)
+                f |= WF_WHITE_BORDER_ONE;
+            if (WhiteBorderMask)
+                f |= WF_WHITE_BORDER_MASK;
+            if (NoTitleBar)
+                f |= WF_NO_TITLE_BAR;
+            if (NoSnapping)
+                f |= WF_NO_SNAPPING;
+            if (AutoPosition)
+                f |= WF_AUTO_POSITION;
+            if (CentreScreen)
+                f |= WF_CENTRE_SCREEN;
+
+            return f;
+        }
+    };
+
     struct CustomWindowDesc
     {
         std::string Classification;
@@ -265,6 +365,7 @@ namespace OpenRCT2::Ui::Windows
         std::vector<CustomWidgetDesc> Widgets;
         std::vector<ColourWithFlags> Colours;
         std::vector<CustomTabDesc> Tabs;
+        CustomWindowFlags Flags;
         std::optional<int32_t> TabIndex;
 
         // Event handlers
@@ -294,6 +395,7 @@ namespace OpenRCT2::Ui::Windows
             result.Title = desc["title"].as_string();
             result.Id = GetOptionalInt(desc["id"]);
             result.TabIndex = GetOptionalInt(desc["tabIndex"]);
+            result.Flags = CustomWindowFlags::FromDukValue(desc["flags"]);
 
             if (desc["widgets"].is_array())
             {
@@ -337,6 +439,11 @@ namespace OpenRCT2::Ui::Windows
         static std::optional<int32_t> GetOptionalInt(DukValue input)
         {
             return input.type() == DukValue::Type::NUMBER ? std::make_optional(input.as_int()) : std::nullopt;
+        }
+
+        static std::optional<DukValue> GetOptionalObject(DukValue input)
+        {
+            return input.type() == DukValue::Type::OBJECT ? std::make_optional(input) : std::nullopt;
         }
     };
 
@@ -887,6 +994,18 @@ namespace OpenRCT2::Ui::Windows
 
             // Add default widgets (window shim)
             widgetList.insert(widgetList.begin(), std::begin(CustomDefaultWidgets), std::end(CustomDefaultWidgets));
+
+            if (flags & WF_NO_TITLE_BAR)
+            {
+                widgetList[WIDX_TITLE].flags |= WIDGET_FLAGS::IS_HIDDEN;
+                widgetList[WIDX_CLOSE].flags |= WIDGET_FLAGS::IS_HIDDEN;
+            }
+
+            if (flags & WF_NO_BACKGROUND || _info.Desc.Flags.Transparent)
+            {
+                widgetList[WIDX_BACKGROUND].flags |= WIDGET_FLAGS::IS_HIDDEN;
+            }
+
             for (size_t i = 0; i < widgetList.size(); i++)
             {
                 _info.WidgetIndexMap.push_back(std::numeric_limits<size_t>::max());
@@ -1131,7 +1250,9 @@ namespace OpenRCT2::Ui::Windows
     WindowBase* WindowCustomOpen(std::shared_ptr<Plugin> owner, DukValue dukDesc)
     {
         auto desc = CustomWindowDesc::FromDukValue(dukDesc);
-        uint16_t windowFlags = WF_RESIZABLE | WF_TRANSPARENT;
+
+        // Not setting WF_TRANSPARENT causes weird artifacts
+        uint16_t windowFlags = desc.Flags.ToWindowFlags() | WF_TRANSPARENT;
         auto* windowMgr = GetWindowManager();
 
         CustomWindow* window{};
