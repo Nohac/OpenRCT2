@@ -17,6 +17,7 @@
     #include "ScTileSelection.hpp"
     #include "ScViewport.hpp"
     #include "ScWindow.hpp"
+    #include "openrct2/interface/WindowClasses.h"
 
     #include <algorithm>
     #include <memory>
@@ -206,6 +207,28 @@ namespace OpenRCT2::Scripting
             windowMgr->CloseAll();
         }
 
+        void showBottomToolbar(bool show)
+        {
+            showWindowClass(WindowClass::BottomToolbar, show);
+        }
+
+        void showTopToolbar(bool show)
+        {
+            showWindowClass(WindowClass::TopToolbar, show);
+        }
+
+        void showWindowClass(WindowClass cls, bool show)
+        {
+            auto* windowMgr = Ui::GetWindowManager();
+            if (show == true)
+            {
+                windowMgr->OpenWindow(cls);
+                return;
+            }
+
+            windowMgr->CloseByClass(cls);
+        }
+
         std::shared_ptr<ScWindow> getWindow(DukValue a) const
         {
             if (a.type() == DukValue::Type::NUMBER)
@@ -384,6 +407,8 @@ namespace OpenRCT2::Scripting
             dukglue_register_method(ctx, &ScUi::openWindow, "openWindow");
             dukglue_register_method(ctx, &ScUi::closeWindows, "closeWindows");
             dukglue_register_method(ctx, &ScUi::closeAllWindows, "closeAllWindows");
+            dukglue_register_method(ctx, &ScUi::showBottomToolbar, "showBottomToolbar");
+            dukglue_register_method(ctx, &ScUi::showTopToolbar, "showTopToolbar");
             dukglue_register_method(ctx, &ScUi::getWindow, "getWindow");
             dukglue_register_method(ctx, &ScUi::showError, "showError");
             dukglue_register_method(ctx, &ScUi::showTextInput, "showTextInput");
